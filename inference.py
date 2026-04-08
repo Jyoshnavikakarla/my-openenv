@@ -202,17 +202,42 @@ def step_get(task: str):
 # HOME ROUTE (FIX 404)
 # -------------------------------
 @app.get("/")
+# -------------------------------
+# HOME ROUTE (SHOW ALL LINKS)
+# -------------------------------
+@app.get("/")
 def home():
+    import os
+
+    # Get HF Space URL
+    space_host = os.getenv("SPACE_HOST")
+
+    if space_host:
+        base_url = f"https://{space_host}"
+    else:
+        base_url = "http://localhost:7860"
+
     return {
         "message": "🚀 Email Agent API is running!",
-        "available_endpoints": {
-            "reset_easy": "/reset/easy",
-            "step_easy_post": "/step/easy",
-            "step_easy_get": "/step/easy",
-            "reset_medium": "/reset/medium",
-            "reset_hard": "/reset/hard"
+        "endpoints": {
+            "easy": {
+                "reset": f"{base_url}/reset/easy",
+                "step_post": f"{base_url}/step/easy",
+                "step_get": f"{base_url}/step/easy"
+            },
+            "medium": {
+                "reset": f"{base_url}/reset/medium",
+                "step_post": f"{base_url}/step/medium",
+                "step_get": f"{base_url}/step/medium"
+            },
+            "hard": {
+                "reset": f"{base_url}/reset/hard",
+                "step_post": f"{base_url}/step/hard",
+                "step_get": f"{base_url}/step/hard"
+            }
         },
-        "usage": "Use POST /step/{task} with JSON body"
+        "docs": f"{base_url}/docs",
+        "note": "Use POST /step/{task} with JSON body to send email"
     }
 
 # -------------------------------
