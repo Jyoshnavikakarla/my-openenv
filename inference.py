@@ -248,28 +248,54 @@ def state():
 # -------------------------------
 # QUICK TEST STEP (GET)
 # -------------------------------
-@app.get("/step/{task}")
-def step_get(task: str):
+@app.post("/step/{task}")
+def step(task: str, action: ActionInput):
     if task not in envs:
-        return {"error": "Invalid task"}
+        return {"status": "fail", "reason": "Invalid task"}
 
-    default_action = {"category": "general", "priority": "low", "response": "Default test action."}
-    obs, reward, done, _ = envs[task].step(default_action)
+    # Convert input
+    action_dict = action.dict()
+
+    # -----------------------
+    # VALIDATION LAYER
+    # -----------------------
+    if not validate_action(action_dict):
+        return {
+            "status": "fail",
+            "reason": "Invalid action format"
+        }
+
+    # -----------------------
+    # LLM CRITERIA CHECK
+    # -----------------------
+    if not llm_check(action_dict["response"]):
+        return {
+            "status": "fail",
+            "reason": "LLM criteria failed"
+        }
+
+    # -----------------------
+    # ENV STEP
+    # -----------------------
+    obs, reward, done, _ = envs[task].step(action_dict)
+
+    reward_score = action_dict.get("reward_points", reward.score)
 
     stats = task_stats[task]
     stats["step"] += 1
     stats["emails_received"] += 1
     stats["emails_sent"] += 1
-    stats["total_reward"] += reward.score
+    stats["total_reward"] += reward_score
 
     return {
+        "status": "success",
         "task": task,
         "step": stats["step"],
         "emails_received": stats["emails_received"],
         "emails_sent": stats["emails_sent"],
-        "reward_points": reward.score,
+        "reward_points": reward_score,
         "average_reward": round(stats["total_reward"] / stats["step"], 2),
-        "resolved": reward.score > 0,
+        "resolved": "✅ Solved" in action_dict.get("response", ""),
         "observation": obs.dict(),
         "done": done
     }
@@ -389,3 +415,38 @@ def startup_event():
 
     print("💡 Use POST /step/{task} with JSON body to send email")
     print("==============================\n")
+def validate_action(action):
+    valid_categories = ["billing", "technical", "general"]
+    valid_priorities = ["easy", "medium", "hard"]
+
+    if action["category"] not in valid_categories:
+        return False
+    if action["priority"] not in valid_priorities:
+        return False
+    if len(action["response"]) < 15:
+        return False
+
+    return True
+def llm_check(response_text):
+    try:
+        prompt = f"""
+        Check if this email response is professional and helpful:
+
+        "{response_text}"
+
+        Answer ONLY in JSON:
+        {{"valid": true or false}}
+        """
+
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = extract_json(completion.choices[0].message.content)
+
+        return result.get("valid", False) if result else False
+
+    except Exception as e:
+        print("LLM check failed:", e)
+        return False
