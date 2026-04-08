@@ -131,6 +131,25 @@ def reset(task: str):
         "emails_sent": 0,
         "reward_points": 0.0
     }
+@app.post("/reset")
+def reset_post(input: dict):
+    task = input.get("task")
+
+    if task not in envs:
+        return {"error": "Invalid task"}
+
+    obs = envs[task].reset()
+
+    task_stats[task]["step"] = 0
+    task_stats[task]["emails_received"] = 0
+    task_stats[task]["emails_sent"] = 0
+    task_stats[task]["total_reward"] = 0.0
+
+    return {
+        "observation": obs.dict(),
+        "reward": 0.0,
+        "done": False
+    }
 
 # -------------------------------
 # STEP ENDPOINT
@@ -169,6 +188,29 @@ def step(task: str, action: ActionInput):
         "observation": obs.dict(),
         "done": done
     }
+@app.post("/step")
+def step_post(input: dict):
+    task = input.get("task")
+
+    if task not in envs:
+        return {"error": "Invalid task"}
+
+    action_dict = {
+        "category": input.get("category"),
+        "priority": input.get("priority"),
+        "response": input.get("response")
+    }
+
+    obs, reward, done, _ = envs[task].step(action_dict)
+
+    return {
+        "observation": obs.dict(),
+        "reward": float(reward.score),
+        "done": done
+    }
+@app.get("/state")
+def state():
+    return task_stats
 
 # -------------------------------
 # QUICK TEST STEP (GET)
@@ -198,10 +240,7 @@ def step_get(task: str):
         "observation": obs.dict(),
         "done": done
     }
-# -------------------------------
-# HOME ROUTE (FIX 404)
-# -------------------------------
-@app.get("/")
+
 # -------------------------------
 # HOME ROUTE (SHOW ALL LINKS)
 # -------------------------------
@@ -240,9 +279,7 @@ def home():
         "note": "Use POST /step/{task} with JSON body to send email"
     }
 
-# -------------------------------
-# BASELINE SCORING SCRIPT
-# -------------------------------
+
 # -------------------------------
 # BASELINE SCORING SCRIPT WITH LINKS
 # -------------------------------
