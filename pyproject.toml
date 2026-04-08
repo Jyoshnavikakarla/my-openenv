@@ -12,4 +12,5 @@ dependencies = [
 ]
 
 [project.scripts]
-start = "inference:app"
+[project.scripts]
+server = "server.app:main"
