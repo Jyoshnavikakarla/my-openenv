@@ -202,8 +202,23 @@ def step_get(task: str):
 # -------------------------------
 # BASELINE SCORING SCRIPT
 # -------------------------------
+# -------------------------------
+# BASELINE SCORING SCRIPT WITH LINKS
+# -------------------------------
 if __name__ == "__main__":
-    print("[START]")
+    import socket
+
+    # Get local IP to use in links
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    port = 8080  # same as uvicorn port
+
+    base_url = f"http://{local_ip}:{port}"
+
+    print("[START] Email Agent Baseline Simulation\n")
+    print(f"Reset endpoint: {base_url}/reset/<task>")
+    print(f"Step endpoint (POST): {base_url}/step/<task>\n")
+
     for task_name in ["easy", "medium", "hard"]:
         env = envs[task_name]
         agent = agents[task_name]
@@ -213,6 +228,10 @@ if __name__ == "__main__":
         total_reward = 0.0
         emails_received = 0
         emails_sent = 0
+
+        print(f"--- Running task: {task_name} ---")
+        print(f"Reset link: {base_url}/reset/{task_name}")
+        print(f"Step link (POST): {base_url}/step/{task_name}\n")
 
         while not done:
             action = agent.act(obs)
@@ -224,6 +243,7 @@ if __name__ == "__main__":
             step_id += 1
 
         avg_reward = round(total_reward / step_id, 2)
-        print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}")
+        print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}\n")
 
-    print("[END]")
+    print("[END] Simulation Completed")
+    print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
