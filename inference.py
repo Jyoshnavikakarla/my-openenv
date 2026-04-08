@@ -198,6 +198,22 @@ def step_get(task: str):
         "observation": obs.dict(),
         "done": done
     }
+# -------------------------------
+# HOME ROUTE (FIX 404)
+# -------------------------------
+@app.get("/")
+def home():
+    return {
+        "message": "🚀 Email Agent API is running!",
+        "available_endpoints": {
+            "reset_easy": "/reset/easy",
+            "step_easy_post": "/step/easy",
+            "step_easy_get": "/step/easy",
+            "reset_medium": "/reset/medium",
+            "reset_hard": "/reset/hard"
+        },
+        "usage": "Use POST /step/{task} with JSON body"
+    }
 
 # -------------------------------
 # BASELINE SCORING SCRIPT
