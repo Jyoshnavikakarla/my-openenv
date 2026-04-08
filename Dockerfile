@@ -20,7 +20,7 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Expose port 8080 (or any port your FastAPI app uses)
-EXPOSE 8080
+EXPOSE 7860
 
 # Command to run FastAPI server
-CMD ["uvicorn", "inference:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+CMD ["uvicorn", "inference:app", "--host", "0.0.0.0", "--port", "7860", "--reload"]

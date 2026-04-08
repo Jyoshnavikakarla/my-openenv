@@ -247,3 +247,34 @@ if __name__ == "__main__":
 
     print("[END] Simulation Completed")
     print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
+    # -------------------------------
+# STARTUP EVENT (HF LOG LINKS)
+# -------------------------------
+@app.on_event("startup")
+def startup_event():
+    import os
+
+    # Hugging Face runs on port 7860
+    port = os.getenv("PORT", "7860")
+
+    # HF Spaces URL (fallback to localhost if not available)
+    space_url = os.getenv("SPACE_HOST")
+    
+    if space_url:
+        base_url = f"https://{space_url}"
+    else:
+        base_url = f"http://localhost:{port}"
+
+    print("\n==============================")
+    print("🚀 Email Agent Started!")
+    print("==============================\n")
+
+    print("🔗 Available Endpoints:\n")
+
+    for task in ["easy", "medium", "hard"]:
+        print(f"➡️ RESET ({task}): {base_url}/reset/{task}")
+        print(f"➡️ STEP  ({task}) [POST]: {base_url}/step/{task}")
+        print(f"➡️ STEP  ({task}) [GET ]: {base_url}/step/{task}\n")
+
+    print("💡 Use POST /step/{task} with JSON body to send email")
+    print("==============================\n")
