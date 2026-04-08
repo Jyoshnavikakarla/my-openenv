@@ -1,0 +1,11 @@
+[project]
+name = "email-agent"
+version = "0.1.0"
+description = "OpenEnv Email Agent"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic"
+]
