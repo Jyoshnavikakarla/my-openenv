@@ -115,6 +115,25 @@ task_stats = {
 # -------------------------------
 # RESET ENDPOINT
 # -------------------------------
+@app.get("/reset")
+def reset_post(input: dict):
+    task = input.get("task")
+
+    if task not in envs:
+        return {"error": "Invalid task"}
+
+    obs = envs[task].reset()
+
+    task_stats[task]["step"] = 0
+    task_stats[task]["emails_received"] = 0
+    task_stats[task]["emails_sent"] = 0
+    task_stats[task]["total_reward"] = 0.0
+
+    return {
+        "observation": obs.dict(),
+        "reward": 0.0,
+        "done": False
+    }
 @app.get("/reset/{task}")
 def reset(task: str):
     if task not in envs:
