@@ -3,7 +3,7 @@ title: ai Agent
 emoji: 🤖
 colorFrom: pink
 colorTo: blue
-sdk: python
+sdk: docker
 app_file: inference.py
 ---
 
