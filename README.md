@@ -1,17 +1,9 @@
 ---
-<<<<<<< HEAD
-title: Email Agent
-emoji: ⚡
+title: ai Agent
+emoji: 🤖
 colorFrom: pink
-colorTo: pink
-=======
-title: Email Agent Env
-emoji: 🔥
-colorFrom: gray
 colorTo: blue
->>>>>>> 455ad09 (add files)
-sdk: docker
-pinned: false
+sdk: python
+app_file: inference.py
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
