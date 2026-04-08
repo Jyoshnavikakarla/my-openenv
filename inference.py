@@ -124,16 +124,16 @@ def reset_post(input: dict):
 
     obs = envs[task].reset()
 
-    task_stats[task]["step"] = 0
-    task_stats[task]["emails_received"] = 0
-    task_stats[task]["emails_sent"] = 0
-    task_stats[task]["total_reward"] = 0.0
-
-    return {
-        "observation": obs.dict(),
-        "reward": 0.0,
-        "done": False
+    # Example email injected on reset
+    example_email = {
+        "subject": "Login Issue",
+        "content": "Hi, I am unable to login to my account even after resetting the password. Please help.",
+        "sender": "user@example.com"
     }
+
+# Put it into observation (if your env supports it)
+
+    
 @app.get("/reset/{task}")
 def reset(task: str):
     if task not in envs:
