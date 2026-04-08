@@ -1,0 +1,37 @@
+name: email-triage-env
+description: Real-world customer support email classification environment
+version: 1.0
+
+entrypoint: env.environment:EmailEnv
+
+tasks:
+  - easy
+  - medium
+  - hard
+
+observation_space:
+  type: object
+  properties:
+    email:
+      type: string
+    sender:
+      type: string
+    step:
+      type: integer
+
+action_space:
+  type: object
+  properties:
+    category:
+      type: string
+    priority:
+      type: string
+    response:
+      type: string
+
+reward:
+  type: float
+  range: [0.0, 1.0]
+
+grader:
+  entrypoint: graders.email_grader:EmailGrader

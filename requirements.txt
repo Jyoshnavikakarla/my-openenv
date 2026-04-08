@@ -1,0 +1,7 @@
+openenv-core
+openai
+pydantic
+python-dotenv
+fastapi
+uvicorn
+gradio
