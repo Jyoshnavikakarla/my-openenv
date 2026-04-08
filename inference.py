@@ -115,20 +115,34 @@ task_stats = {
 # -------------------------------
 # RESET ENDPOINT
 # -------------------------------
-@app.get("/reset")
-def reset_post(input: dict):
-    task = input.get("task")
+from fastapi import Request
+
+@app.post("/reset")
+async def reset_post(request: Request):
+    try:
+        data = await request.json()
+        task = data.get("task", "easy")
+    except:
+        # If no body → default task
+        task = "easy"
 
     if task not in envs:
         return {"error": "Invalid task"}
 
     obs = envs[task].reset()
 
-    # Example email injected on reset
-    example_email = {
+    # ✅ Example email injected automatically
+    obs = obs.dict()
+    obs["email"] = {
         "subject": "Login Issue",
-        "content": "Hi, I am unable to login to my account even after resetting the password. Please help.",
+        "content": "I can't log into my account even after resetting password.",
         "sender": "user@example.com"
+    }
+
+    return {
+        "observation": obs,
+        "reward": 0.0,
+        "done": False
     }
 
 # Put it into observation (if your env supports it)
