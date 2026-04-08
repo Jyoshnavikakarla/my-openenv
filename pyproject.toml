@@ -1,15 +1,13 @@
 [project]
 name = "email-agent"
 version = "0.1.0"
-description = "OpenEnv Email Agent"
 requires-python = ">=3.10"
 
 dependencies = [
     "fastapi",
     "uvicorn",
-    "pydantic",
-    "openenv-core>=0.2.0"
+    "pydantic"
 ]
 
 [project.scripts]
-start = "server.app:main"
+server = "server.app:main"
