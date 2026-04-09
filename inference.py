@@ -1,20 +1,24 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import os, json, re
-from openai import OpenAI
+import  json, re
 from env.environment import EmailEnv
 
-# -------------------------------
-# LOAD ENV
-# -------------------------------
-load_dotenv()
+from openai import OpenAI
+import os
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-HF_TOKEN = os.getenv("HF_TOKEN")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+# Use validator-injected API_BASE_URL and API_KEY if present
+API_BASE_URL = os.environ.get("API_BASE_URL")
+API_KEY = os.environ.get("API_KEY")
+
+if API_BASE_URL and API_KEY:
+    # Validator environment
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+else:
+    # Local testing: use your own OpenAI key
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
@@ -444,9 +448,8 @@ def llm_check(response_text):
         )
 
         result = extract_json(completion.choices[0].message.content)
-
         return result.get("valid", False) if result else False
 
     except Exception as e:
-        print("LLM check failed:", e)
+        print("LLM check failed:", e, flush=True)
         return False
