@@ -5,4 +5,5 @@ python-dotenv
 fastapi
 uvicorn
 gradio
-
+litellm
+litellm[proxy]
