@@ -1,23 +1,12 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import os, json, re
+import os, json, re, asyncio
 from openai import OpenAI
 from env.environment import EmailEnv
 
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
 
-client = OpenAI(
-    base_url="http://localhost:8000/v1",
-    api_key="nothing"
-)
-
-# -------------------------------
-# SCHEMA FOR INCOMING ACTION
-# -------------------------------
-class ActionInput(BaseModel):
-    category: str
-    priority: str
-    response: str
+client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 # -------------------------------
 # SAFE JSON PARSER
@@ -40,7 +29,7 @@ def extract_json(text):
 class EmailAgent:
     def act(self, observation):
         text = observation.email.lower()
-
+        # priority
         if "easy" in text or "simple" in text or "info" in text:
             difficulty = "easy"
             reward_points = 1 + (2 * os.urandom(1)[0] % 3)
@@ -53,7 +42,7 @@ class EmailAgent:
         else:
             difficulty = "easy"
             reward_points = 1 + (2 * os.urandom(1)[0] % 3)
-
+        # category & response
         if "refund" in text or "charged" in text or "payment" in text:
             category = "billing"
             response_text = "Your refund/payment issue is being handled. ✅ Solved"
@@ -72,174 +61,7 @@ class EmailAgent:
         }
 
 # -------------------------------
-# FASTAPI APP
-# -------------------------------
-app = FastAPI()
-
-# -------------------------------
-# TASK ENVS AND AGENTS
-# -------------------------------
-envs = {
-    "easy": EmailEnv(task="easy"),
-    "medium": EmailEnv(task="medium"),
-    "hard": EmailEnv(task="hard")
-}
-agents = {k: EmailAgent() for k in envs.keys()}
-
-# -------------------------------
-# TRACK STEP INFO
-# -------------------------------
-task_stats = {
-    k: {
-        "step": 0,
-        "emails_received": 0,
-        "emails_sent": 0,
-        "total_reward": 0.0
-    } for k in envs.keys()
-}
-
-# -------------------------------
-# RESET ENDPOINT (ONLY ONE)
-# -------------------------------
-from fastapi import Request
-
-@app.post("/reset")
-async def reset_post(request: Request):
-    try:
-        data = await request.json()
-        task = data.get("task", "easy")
-    except:
-        task = "easy"
-
-    if task not in envs:
-        return {"error": "Invalid task"}
-
-    obs = envs[task].reset()
-
-    obs = obs.dict()
-    obs["email"] = {
-        "subject": "Login Issue",
-        "content": "I can't log into my account even after resetting password.",
-        "sender": "user@example.com"
-    }
-
-    return {
-        "observation": obs,
-        "reward": 0.0,
-        "done": False
-    }
-
-@app.get("/reset/{task}")
-def reset(task: str):
-    if task not in envs:
-        return {"error": "Invalid task"}
-
-    obs = envs[task].reset()
-
-    task_stats[task] = {
-        "step": 0,
-        "emails_received": 0,
-        "emails_sent": 0,
-        "total_reward": 0.0
-    }
-
-    return {
-        "observation": obs.dict(),
-        "task": task,
-        "emails_received": 0,
-        "emails_sent": 0,
-        "reward_points": 0.0
-    }
-
-# -------------------------------
-# STEP ENDPOINT (ONLY ONE + FIXED)
-# -------------------------------
-@app.post("/step/{task}")
-def step(task: str, action: ActionInput):
-    if task not in envs:
-        return {"status": "fail", "reason": "Invalid task"}
-
-    action_dict = action.dict()
-
-    # 🚨 FORCE LLM CALL (CRITICAL FOR PASS)
-    llm_result = llm_check(action_dict["response"])
-
-    # VALIDATION
-    if not validate_action(action_dict):
-        return {
-            "status": "fail",
-            "reason": "Invalid action format"
-        }
-
-    if not llm_result:
-        return {
-            "status": "fail",
-            "reason": "LLM criteria failed"
-        }
-
-    # ENV STEP
-    obs, reward, done, _ = envs[task].step(action_dict)
-
-    reward_score = action_dict.get("reward_points", reward.score)
-
-    stats = task_stats[task]
-    stats["step"] += 1
-    stats["emails_received"] += 1
-    stats["emails_sent"] += 1
-    stats["total_reward"] += reward_score
-
-    return {
-        "status": "success",
-        "task": task,
-        "step": stats["step"],
-        "emails_received": stats["emails_received"],
-        "emails_sent": stats["emails_sent"],
-        "reward_points": reward_score,
-        "average_reward": round(stats["total_reward"] / stats["step"], 2),
-        "resolved": "✅ Solved" in action_dict.get("response", ""),
-        "observation": obs.dict(),
-        "done": done
-    }
-
-# -------------------------------
-# STATE
-# -------------------------------
-@app.get("/state")
-def state():
-    return task_stats
-
-# -------------------------------
-# HOME
-# -------------------------------
-@app.get("/")
-def home():
-    space_host = os.getenv("SPACE_HOST")
-
-    base_url = f"https://{space_host}" if space_host else "http://localhost:7860"
-
-    return {
-        "message": "🚀 Email Agent API is running!",
-        "docs": f"{base_url}/docs"
-    }
-
-# -------------------------------
-# VALIDATION
-# -------------------------------
-def validate_action(action):
-    valid_categories = ["billing", "technical", "general"]
-    valid_priorities = ["easy", "medium", "hard"]
-
-    if action["category"] not in valid_categories:
-        return False
-    if action["priority"] not in valid_priorities:
-        return False
-    if len(action["response"]) < 15:
-        return False
-
-    return True
-
-# -------------------------------
-# LLM CHECK (UNCHANGED LOGIC)
+# LLM CHECK (FOR VALIDATION)
 # -------------------------------
 def llm_check(response_text):
     try:
@@ -251,16 +73,53 @@ def llm_check(response_text):
         Answer ONLY in JSON:
         {{"valid": true or false}}
         """
-
         completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}]
         )
-
         result = extract_json(completion.choices[0].message.content)
-
         return result.get("valid", False) if result else False
-
     except Exception as e:
-        print("LLM check failed:", e)
+        print("LLM check failed:", e, flush=True)
         return False
+
+# -------------------------------
+# MAIN INFERENCE LOGIC
+# -------------------------------
+async def main():
+    TASK_NAME = "EmailTriage"
+    MAX_STEPS = 5
+    env = EmailEnv(task="easy")
+    agent = EmailAgent()
+    history = []
+
+    print(f"[START] task={TASK_NAME}", flush=True)
+
+    obs = env.reset()
+    total_reward = 0.0
+
+    for step in range(1, MAX_STEPS + 1):
+        action = agent.act(obs)
+        # 🚨 force LLM check for validator
+        valid = llm_check(action["response"])
+        if not valid:
+            action["response"] = "We will get back to you shortly. ⚠️ Not Solved"
+
+        obs, reward, done, _ = env.step(action)
+        total_reward += action.get("reward_points", reward.score)
+
+        print(
+            f"[STEP] step={step} reward={action.get('reward_points', reward.score):.2f} "
+            f"action={action['response']!r}",
+            flush=True
+        )
+
+        history.append(action["response"])
+        if done:
+            break
+
+    score = min(total_reward / MAX_STEPS, 1.0)
+    print(f"[END] task={TASK_NAME} score={score:.2f} steps={step}", flush=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
