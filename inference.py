@@ -6,7 +6,7 @@ from env.environment import EmailEnv
 
 from openai import OpenAI
 import os
-
+load_dotenv()
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
 # Use validator-injected API_BASE_URL and API_KEY if present
