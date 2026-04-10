@@ -223,19 +223,25 @@ def step_post(input: dict):
         "response": input.get("response")
     }
 
-    # ✅ Run LLM criteria check here
+    # ✅ Run LLM criteria check
     if not llm_check(action_dict["response"]):
         return {
             "status": "fail",
             "reason": "LLM criteria failed"
         }
 
+    # Step the environment
     obs, reward, done, _ = envs[task].step(action_dict)
+
+    # ✅ Normalize reward to strictly (0,1)
+    raw_score = reward.score
+    normalized_score = max(0.01, min(raw_score / 10.0, 0.99))
 
     return {
         "status": "success",
+        "task": task,
         "observation": obs.dict(),
-        "reward": float(reward.score),
+        "reward": normalized_score,
         "done": done
     }
 
