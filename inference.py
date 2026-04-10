@@ -19,7 +19,7 @@ if API_BASE_URL and API_KEY:
 else:
     # Local testing: use your own OpenAI key
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
+print("DEBUG: LLM CHECK CALLED", flush=True)
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
 # -------------------------------
