@@ -387,10 +387,10 @@ if __name__ == "__main__":
         while not done:
             action = agent.act(obs)
             obs, reward, done, _ = env.step(action)
-            total_reward += reward.score
             emails_received += 1
             emails_sent += 1
             normalized = normalize_score(reward.score)
+            total_reward += normalized
             print(f"[STEP] task={task_name} step={step_id} action={action} reward={normalized} resolved={normalized>0}")
 
             step_id += 1
@@ -444,4 +444,17 @@ def validate_action(action):
         return False
 
     return True
-llm_check(action["response"])
+while not done:
+    action = agent.act(obs)
+
+    # ✅ Trigger LLM check on the agent’s response
+    llm_check(action["response"])
+
+    obs, reward, done, _ = env.step(action)
+    normalized = normalize_score(reward.score)
+    total_reward += normalized
+    emails_received += 1
+    emails_sent += 1
+    print(f"[STEP] task={task_name} step={step_id} action={action} reward={normalized} resolved={normalized>0}")
+    step_id += 1
+
