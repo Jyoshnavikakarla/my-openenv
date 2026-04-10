@@ -7,6 +7,8 @@ from env.environment import EmailEnv
 from openai import OpenAI
 import os
 load_dotenv()
+print("BASE_URL:", os.environ.get("API_BASE_URL"), flush=True)
+print("API_KEY:", os.environ.get("API_KEY"), flush=True)
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
 # Use validator-injected API_BASE_URL and API_KEY if present
@@ -453,3 +455,4 @@ def llm_check(response_text):
     except Exception as e:
         print("LLM check failed:", e, flush=True)
         return False
+llm_check("This is a test email response")
