@@ -4,13 +4,8 @@ from dotenv import load_dotenv
 import  json, re
 from env.environment import EmailEnv
 
-from openai import OpenAI
-import os
 import os
 from openai import OpenAI
-
-print("BASE_URL:", os.environ.get("API_BASE_URL"), flush=True)
-print("API_KEY:", os.environ.get("API_KEY"), flush=True)
 
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
@@ -19,7 +14,29 @@ client = OpenAI(
     api_key=os.environ["API_KEY"]
 )
 
-print("DEBUG: LLM CHECK CALLED", flush=True)
+def llm_check(response_text):
+    try:
+        prompt = f"""
+        Check if this email response is professional and helpful:
+
+        "{response_text}"
+
+        Answer ONLY in JSON:
+        {{"valid": true or false}}
+        """
+
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = extract_json(completion.choices[0].message["content"])
+        print("LLM raw response:", completion, flush=True)
+        return result.get("valid", False) if result else False
+
+    except Exception as e:
+        print("LLM check failed:", e, flush=True)
+        return False
 
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
@@ -400,27 +417,3 @@ def validate_action(action):
         return False
 
     return True
-def llm_check(response_text):
-    try:
-        prompt = f"""
-        Check if this email response is professional and helpful:
-
-        "{response_text}"
-
-        Answer ONLY in JSON:
-        {{"valid": true or false}}
-        """
-
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        # Correct way to access content
-        result = extract_json(completion.choices[0].message["content"])
-        print("LLM raw response:", completion, flush=True)  # Debug
-        return result.get("valid", False) if result else False
-
-    except Exception as e:
-        print("LLM check failed:", e, flush=True)
-        return False
