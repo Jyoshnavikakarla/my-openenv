@@ -425,3 +425,4 @@ def validate_action(action):
         return False
 
     return True
+llm_check(action["response"])
