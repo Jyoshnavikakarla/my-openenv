@@ -61,9 +61,13 @@ def extract_json(text):
                 pass
     return None
 
-# -------------------------------
-# EMAIL AGENT
-# -------------------------------
+def normalize_score(raw_score: float) -> float:
+    """
+    Normalize any raw reward score into the strict (0,1) range.
+    Ensures values are never 0.0 or 1.0.
+    """
+    return max(0.01, min(raw_score / 10.0, 0.99))
+
 # -------------------------------
 # EMAIL AGENT
 # -------------------------------
@@ -231,11 +235,11 @@ def step_post(input: dict):
         }
 
     # Step the environment
+        
     obs, reward, done, _ = envs[task].step(action_dict)
 
     # ✅ Normalize reward to strictly (0,1)
-    raw_score = reward.score
-    normalized_score = max(0.01, min(raw_score / 10.0, 0.99))
+    normalized_score = normalize_score(reward.score)
 
     return {
         "status": "success",
@@ -244,6 +248,7 @@ def step_post(input: dict):
         "reward": normalized_score,
         "done": done
     }
+
 
 @app.get("/state")
 def state():
@@ -281,15 +286,19 @@ def step(task: str, action: ActionInput):
     # -----------------------
     # ENV STEP
     # -----------------------
+        # -----------------------
+    # ENV STEP
+    # -----------------------
     obs, reward, done, _ = envs[task].step(action_dict)
 
     reward_score = action_dict.get("reward_points", reward.score)
+    normalized_score = normalize_score(reward_score)
 
     stats = task_stats[task]
     stats["step"] += 1
     stats["emails_received"] += 1
     stats["emails_sent"] += 1
-    stats["total_reward"] += reward_score
+    stats["total_reward"] += normalized_score
 
     return {
         "status": "success",
@@ -297,12 +306,13 @@ def step(task: str, action: ActionInput):
         "step": stats["step"],
         "emails_received": stats["emails_received"],
         "emails_sent": stats["emails_sent"],
-        "reward_points": reward_score,
+        "reward": normalized_score,   # ✅ normalized
         "average_reward": round(stats["total_reward"] / stats["step"], 2),
         "resolved": "✅ Solved" in action_dict.get("response", ""),
         "observation": obs.dict(),
         "done": done
     }
+
 print("STEP HIT", flush=True)
 # -------------------------------
 # HOME ROUTE (SHOW ALL LINKS)
@@ -380,11 +390,14 @@ if __name__ == "__main__":
             total_reward += reward.score
             emails_received += 1
             emails_sent += 1
-            print(f"[STEP] task={task_name} step={step_id} action={action} reward={reward.score} resolved={reward.score>0}")
+            normalized = normalize_score(reward.score)
+            print(f"[STEP] task={task_name} step={step_id} action={action} reward={normalized} resolved={normalized>0}")
+
             step_id += 1
 
         avg_reward = round(total_reward / step_id, 2)
         print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}\n")
+
 
     print("[END] Simulation Completed")
     print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
