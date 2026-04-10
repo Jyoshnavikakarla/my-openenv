@@ -20,10 +20,7 @@ client = OpenAI(
 )
 
 print("DEBUG: LLM CHECK CALLED", flush=True)
-completion = client.chat.completions.create(
-    model=MODEL_NAME,
-    messages=[{"role": "user", "content": "Hello"}]
-)
+
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
 # -------------------------------
@@ -195,40 +192,7 @@ def reset_post(input: dict):
 # -------------------------------
 # STEP ENDPOINT
 # -------------------------------
-@app.post("/step/{task}")
-def step(task: str, action: ActionInput):
-    if task not in envs:
-        return {"error": "Invalid task"}
 
-    # Generate action if user just provided an email
-    if hasattr(action, "response") and not action.response:
-        action_dict = EmailAgent().act(action)
-    else:
-        action_dict = action.dict()
-
-    # Step in env
-    obs, reward, done, _ = envs[task].step(action_dict)
-
-    # Use reward from agent
-    reward_score = action_dict.get("reward_points", reward.score)
-
-    stats = task_stats[task]
-    stats["step"] += 1
-    stats["emails_received"] += 1
-    stats["emails_sent"] += 1
-    stats["total_reward"] += reward_score
-
-    return {
-        "task": task,
-        "step": stats["step"],
-        "emails_received": stats["emails_received"],
-        "emails_sent": stats["emails_sent"],
-        "reward_points": reward_score,
-        "average_reward": round(stats["total_reward"] / stats["step"], 2),
-        "resolved": "✅ Solved" in action_dict.get("response", ""),
-        "observation": obs.dict(),
-        "done": done
-    }
 @app.post("/step")
 def step_post(input: dict):
     task = input.get("task")
@@ -249,6 +213,7 @@ def step_post(input: dict):
         "reward": float(reward.score),
         "done": done
     }
+    
 @app.get("/state")
 def state():
     return task_stats
@@ -307,7 +272,7 @@ def step(task: str, action: ActionInput):
         "observation": obs.dict(),
         "done": done
     }
-
+print("STEP HIT", flush=True)
 # -------------------------------
 # HOME ROUTE (SHOW ALL LINKS)
 # -------------------------------
@@ -457,4 +422,4 @@ def llm_check(response_text):
     except Exception as e:
         print("LLM check failed:", e, flush=True)
         return False
-llm_check("This is a test email response")
+
