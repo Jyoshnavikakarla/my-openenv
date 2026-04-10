@@ -265,22 +265,17 @@ def step(task: str, action: ActionInput):
 
     action_dict = action.dict()
 
-    # Validate action
     if not validate_action(action_dict):
         return {"status": "fail", "reason": "Invalid action format"}
 
-    # LLM criteria check
     if not llm_check(action_dict["response"]):
         return {"status": "fail", "reason": "LLM criteria failed"}
 
-    # Step environment
     obs, reward, done, _ = envs[task].step(action_dict)
 
-    # Normalize reward
     reward_score = action_dict.get("reward_points", reward.score)
     normalized_score = normalize_score(reward_score)
 
-    # Update stats
     stats = task_stats[task]
     stats["step"] += 1
     stats["emails_received"] += 1
@@ -293,12 +288,13 @@ def step(task: str, action: ActionInput):
         "step": stats["step"],
         "emails_received": stats["emails_received"],
         "emails_sent": stats["emails_sent"],
-        "reward": normalized_score,   # ✅ normalized
+        "reward": normalized_score,
         "average_reward": round(stats["total_reward"] / stats["step"], 2),
         "resolved": "✅ Solved" in action_dict.get("response", ""),
         "observation": obs.dict(),
         "done": done
     }
+
 
 print("STEP HIT", flush=True)
 # -------------------------------
@@ -367,9 +363,7 @@ if __name__ == "__main__":
 
         while not done:
             action = agent.act(obs)
-
-            # ✅ Trigger LLM check
-            llm_check(action["response"])
+            llm_check(action["response"])   # trigger proxy
 
             obs, reward, done, _ = env.step(action)
             normalized = normalize_score(reward.score)
@@ -383,6 +377,8 @@ if __name__ == "__main__":
         avg_reward = round(total_reward / step_id, 2)
         print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}\n")
 
+
+        
     print("[END] Simulation Completed")
 
     print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
@@ -429,4 +425,4 @@ def validate_action(action):
         return False
 
     return True
-llm_check(action["response"])
+
