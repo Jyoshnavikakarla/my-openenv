@@ -6,22 +6,24 @@ from env.environment import EmailEnv
 
 from openai import OpenAI
 import os
-load_dotenv()
+import os
+from openai import OpenAI
+
 print("BASE_URL:", os.environ.get("API_BASE_URL"), flush=True)
 print("API_KEY:", os.environ.get("API_KEY"), flush=True)
+
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
-# Use validator-injected API_BASE_URL and API_KEY if present
-API_BASE_URL = os.environ.get("API_BASE_URL")
-API_KEY = os.environ.get("API_KEY")
+client = OpenAI(
+    base_url=os.environ["API_BASE_URL"],
+    api_key=os.environ["API_KEY"]
+)
 
-if API_BASE_URL and API_KEY:
-    # Validator environment
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-else:
-    # Local testing: use your own OpenAI key
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 print("DEBUG: LLM CHECK CALLED", flush=True)
+completion = client.chat.completions.create(
+    model=MODEL_NAME,
+    messages=[{"role": "user", "content": "Hello"}]
+)
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
 # -------------------------------
