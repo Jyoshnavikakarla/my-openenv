@@ -418,6 +418,7 @@ def llm_check(response_text):
 
         # Correct way to access content
         result = extract_json(completion.choices[0].message["content"])
+        print("LLM raw response:", completion, flush=True)  # Debug
         return result.get("valid", False) if result else False
 
     except Exception as e:
