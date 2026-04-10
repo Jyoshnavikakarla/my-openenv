@@ -265,17 +265,22 @@ def step(task: str, action: ActionInput):
 
     action_dict = action.dict()
 
+    # Validate action
     if not validate_action(action_dict):
         return {"status": "fail", "reason": "Invalid action format"}
 
+    # LLM criteria check
     if not llm_check(action_dict["response"]):
         return {"status": "fail", "reason": "LLM criteria failed"}
 
+    # Step environment
     obs, reward, done, _ = envs[task].step(action_dict)
 
+    # Normalize reward
     reward_score = action_dict.get("reward_points", reward.score)
     normalized_score = normalize_score(reward_score)
 
+    # Update stats
     stats = task_stats[task]
     stats["step"] += 1
     stats["emails_received"] += 1
@@ -341,16 +346,12 @@ def home():
 if __name__ == "__main__":
     import socket
 
-    # Get local IP to use in links
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
-    port = 8080  # same as uvicorn port
-
+    port = 8080
     base_url = f"http://{local_ip}:{port}"
 
     print("[START] Email Agent Baseline Simulation\n")
-    print(f"Reset endpoint: {base_url}/reset/<task>")
-    print(f"Step endpoint (POST): {base_url}/step/<task>\n")
 
     for task_name in ["easy", "medium", "hard"]:
         env = envs[task_name]
@@ -363,13 +364,11 @@ if __name__ == "__main__":
         emails_sent = 0
 
         print(f"--- Running task: {task_name} ---")
-        print(f"Reset link: {base_url}/reset/{task_name}")
-        print(f"Step link (POST): {base_url}/step/{task_name}\n")
 
         while not done:
             action = agent.act(obs)
 
-            # ✅ Trigger LLM check on the agent’s response
+            # ✅ Trigger LLM check
             llm_check(action["response"])
 
             obs, reward, done, _ = env.step(action)
@@ -377,16 +376,15 @@ if __name__ == "__main__":
             total_reward += normalized
             emails_received += 1
             emails_sent += 1
+
             print(f"[STEP] task={task_name} step={step_id} action={action} reward={normalized} resolved={normalized>0}")
             step_id += 1
-
-
 
         avg_reward = round(total_reward / step_id, 2)
         print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}\n")
 
-
     print("[END] Simulation Completed")
+
     print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
     # -------------------------------
 # STARTUP EVENT (HF LOG LINKS)
