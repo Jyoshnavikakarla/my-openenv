@@ -239,57 +239,35 @@ def state():
 # QUICK TEST STEP (GET)
 # -------------------------------
 @app.post("/step/{task}")
-def step(task: str, action: ActionInput):
+@app.post("/step")
+def step_post(input: dict):
+    task = input.get("task")
+
     if task not in envs:
-        return {"status": "fail", "reason": "Invalid task"}
+        return {"error": "Invalid task"}
 
-    # Convert input
-    action_dict = action.dict()
+    action_dict = {
+        "category": input.get("category"),
+        "priority": input.get("priority"),
+        "response": input.get("response")
+    }
 
-    # -----------------------
-    # VALIDATION LAYER
-    # -----------------------
-    if not validate_action(action_dict):
-        return {
-            "status": "fail",
-            "reason": "Invalid action format"
-        }
-
-    # -----------------------
-    # LLM CRITERIA CHECK
-    # -----------------------
+    # ✅ Run LLM criteria check here
     if not llm_check(action_dict["response"]):
         return {
             "status": "fail",
             "reason": "LLM criteria failed"
         }
 
-    # -----------------------
-    # ENV STEP
-    # -----------------------
     obs, reward, done, _ = envs[task].step(action_dict)
-
-    reward_score = action_dict.get("reward_points", reward.score)
-
-    stats = task_stats[task]
-    stats["step"] += 1
-    stats["emails_received"] += 1
-    stats["emails_sent"] += 1
-    stats["total_reward"] += reward_score
 
     return {
         "status": "success",
-        "task": task,
-        "step": stats["step"],
-        "emails_received": stats["emails_received"],
-        "emails_sent": stats["emails_sent"],
-        "reward_points": reward_score,
-        "average_reward": round(stats["total_reward"] / stats["step"], 2),
-        "resolved": "✅ Solved" in action_dict.get("response", ""),
         "observation": obs.dict(),
+        "reward": float(reward.score),
         "done": done
     }
-print("STEP HIT", flush=True)
+
 # -------------------------------
 # HOME ROUTE (SHOW ALL LINKS)
 # -------------------------------
