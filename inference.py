@@ -257,38 +257,20 @@ def state():
 # -------------------------------
 # QUICK TEST STEP (GET)
 # -------------------------------
+
 @app.post("/step/{task}")
 def step(task: str, action: ActionInput):
     if task not in envs:
         return {"status": "fail", "reason": "Invalid task"}
 
-    # Convert input
     action_dict = action.dict()
 
-    # -----------------------
-    # VALIDATION LAYER
-    # -----------------------
     if not validate_action(action_dict):
-        return {
-            "status": "fail",
-            "reason": "Invalid action format"
-        }
+        return {"status": "fail", "reason": "Invalid action format"}
 
-    # -----------------------
-    # LLM CRITERIA CHECK
-    # -----------------------
     if not llm_check(action_dict["response"]):
-        return {
-            "status": "fail",
-            "reason": "LLM criteria failed"
-        }
+        return {"status": "fail", "reason": "LLM criteria failed"}
 
-    # -----------------------
-    # ENV STEP
-    # -----------------------
-        # -----------------------
-    # ENV STEP
-    # -----------------------
     obs, reward, done, _ = envs[task].step(action_dict)
 
     reward_score = action_dict.get("reward_points", reward.score)
@@ -449,3 +431,4 @@ def validate_action(action):
         return False
 
     return True
+llm_check(action["response"])
