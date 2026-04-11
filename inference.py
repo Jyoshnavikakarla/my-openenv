@@ -1,42 +1,20 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import  json, re
+import os, json, re
+from openai import OpenAI
 from env.environment import EmailEnv
 
-import os
-from openai import OpenAI
+# -------------------------------
+# LOAD ENV
+# -------------------------------
+load_dotenv()
 
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+HF_TOKEN = os.getenv("HF_TOKEN")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4")
 
-client = OpenAI(
-    base_url=os.environ["API_BASE_URL"],
-    api_key=os.environ["API_KEY"]
-)
-
-def llm_check(response_text):
-    try:
-        prompt = f"""
-        Check if this email response is professional and helpful:
-
-        "{response_text}"
-
-        Answer ONLY in JSON:
-        {{"valid": true or false}}
-        """
-
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        result = extract_json(completion.choices[0].message["content"])
-        print("LLM raw response:", completion, flush=True)
-        return result.get("valid", False) if result else False
-
-    except Exception as e:
-        print("LLM check failed:", e, flush=True)
-        return False
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
@@ -61,18 +39,9 @@ def extract_json(text):
                 pass
     return None
 
-def normalize_score(raw_score: float) -> float:
-    try:
-        val = float(raw_score)
-    except:
-        val = 0.5 
-    
-    # If the score is already normalized (0-1), just clamp it slightly
-    if val <= 1.0:
-        return max(0.05, min(val, 0.95))
-    
-    # If it's a raw point score (0-10), scale it
-    return 0.05 + (0.9 * (val / 10.0))
+# -------------------------------
+# EMAIL AGENT
+# -------------------------------
 # -------------------------------
 # EMAIL AGENT
 # -------------------------------
@@ -218,13 +187,46 @@ def reset_post(input: dict):
 # -------------------------------
 # STEP ENDPOINT
 # -------------------------------
+@app.post("/step/{task}")
+def step(task: str, action: ActionInput):
+    if task not in envs:
+        return {"error": "Invalid task"}
 
+    # Generate action if user just provided an email
+    if hasattr(action, "response") and not action.response:
+        action_dict = EmailAgent().act(action)
+    else:
+        action_dict = action.dict()
+
+    # Step in env
+    obs, reward, done, _ = envs[task].step(action_dict)
+
+    # Use reward from agent
+    reward_score = action_dict.get("reward_points", reward.score)
+
+    stats = task_stats[task]
+    stats["step"] += 1
+    stats["emails_received"] += 1
+    stats["emails_sent"] += 1
+    stats["total_reward"] += reward_score
+
+    return {
+        "task": task,
+        "step": stats["step"],
+        "emails_received": stats["emails_received"],
+        "emails_sent": stats["emails_sent"],
+        "reward_points": reward_score,
+        "average_reward": round(stats["total_reward"] / stats["step"], 2),
+        "resolved": "✅ Solved" in action_dict.get("response", ""),
+        "observation": obs.dict(),
+        "done": done
+    }
 @app.post("/step")
 def step_post(input: dict):
     task = input.get("task")
 
     if task not in envs:
-        return {"status": "fail", "reason": "Invalid task"}
+        return {"error": "Invalid task"}
 
     action_dict = {
         "category": input.get("category"),
@@ -232,30 +234,13 @@ def step_post(input: dict):
         "response": input.get("response")
     }
 
-    # ✅ Run LLM criteria check
-    if not llm_check(action_dict["response"]):
-        return {
-            "status": "fail",
-            "reason": "LLM criteria failed"
-        }
-
-    # Step the environment
-        
     obs, reward, done, _ = envs[task].step(action_dict)
 
-    # ✅ Normalize reward to strictly (0,1)
-    normalized_score = normalize_score(reward.score)
-
     return {
-        "status": "success",
-        "task": task,
         "observation": obs.dict(),
-        "reward": normalized_score,
+        "reward": float(reward.score),
         "done": done
     }
-
-
-
 @app.get("/state")
 def state():
     return task_stats
@@ -263,49 +248,58 @@ def state():
 # -------------------------------
 # QUICK TEST STEP (GET)
 # -------------------------------
-
-@app.post("/step/{task}")
 @app.post("/step/{task}")
 def step(task: str, action: ActionInput):
     if task not in envs:
         return {"status": "fail", "reason": "Invalid task"}
 
+    # Convert input
     action_dict = action.dict()
-    
-    # Validation logic
+
+    # -----------------------
+    # VALIDATION LAYER
+    # -----------------------
     if not validate_action(action_dict):
-        return {"status": "fail", "reward": 0.01, "done": True}
+        return {
+            "status": "fail",
+            "reason": "Invalid action format"
+        }
 
+    # -----------------------
+    # LLM CRITERIA CHECK
+    # -----------------------
     if not llm_check(action_dict["response"]):
-        return {"status": "fail", "reward": 0.02, "done": True}
+        return {
+            "status": "fail",
+            "reason": "LLM criteria failed"
+        }
 
-    # Step the environment
+    # -----------------------
+    # ENV STEP
+    # -----------------------
     obs, reward, done, _ = envs[task].step(action_dict)
 
-    # ✅ Normalize reward strictly into (0,1)
-    final_score = normalize_score(reward.score)
+    reward_score = action_dict.get("reward_points", reward.score)
 
-    # ✅ Add at least 3 tasks with graders
-    tasks = [
-        {"name": "task1", "grader": lambda s: max(0.01, min(0.99, s))},
-        {"name": "task2", "grader": lambda s: max(0.01, min(0.99, s))},
-        {"name": "task3", "grader": lambda s: max(0.01, min(0.99, s))}
-    ]
-
-    results = []
-    for t in tasks:
-        results.append({"task": t["name"], "score": t["grader"](final_score)})
+    stats = task_stats[task]
+    stats["step"] += 1
+    stats["emails_received"] += 1
+    stats["emails_sent"] += 1
+    stats["total_reward"] += reward_score
 
     return {
+        "status": "success",
+        "task": task,
+        "step": stats["step"],
+        "emails_received": stats["emails_received"],
+        "emails_sent": stats["emails_sent"],
+        "reward_points": reward_score,
+        "average_reward": round(stats["total_reward"] / stats["step"], 2),
+        "resolved": "✅ Solved" in action_dict.get("response", ""),
         "observation": obs.dict(),
-        "reward": final_score,   # main reward
-        "graders": results,      # ✅ explicit graders list
-        "done": done,
-        "status": "success"
+        "done": done
     }
 
-
-print("STEP HIT", flush=True)
 # -------------------------------
 # HOME ROUTE (SHOW ALL LINKS)
 # -------------------------------
@@ -349,12 +343,23 @@ def home():
 # BASELINE SCORING SCRIPT WITH LINKS
 # -------------------------------
 if __name__ == "__main__":
-    print("[START] Email Agent Baseline Simulation")
+    import socket
+
+    # Get local IP to use in links
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    port = 8080  # same as uvicorn port
+
+    base_url = f"http://{local_ip}:{port}"
+
+    print("[START] Email Agent Baseline Simulation\n")
+    print(f"Reset endpoint: {base_url}/reset/<task>")
+    print(f"Step endpoint (POST): {base_url}/step/<task>\n")
 
     for task_name in ["easy", "medium", "hard"]:
-        env = EmailEnv(task=task_name)
-        agent = EmailAgent()
-        state = env.reset()
+        env = envs[task_name]
+        agent = agents[task_name]
+        obs = env.reset()
         done = False
         step_id = 0
         total_reward = 0.0
@@ -362,41 +367,24 @@ if __name__ == "__main__":
         emails_sent = 0
 
         print(f"--- Running task: {task_name} ---")
+        print(f"Reset link: {base_url}/reset/{task_name}")
+        print(f"Step link (POST): {base_url}/step/{task_name}\n")
 
         while not done:
-            action = agent.act(state)
-
-            # ✅ Trigger LLM proxy check
-            llm_check(action["response"])
-
-            state, reward, done, _ = env.step(action)
-
-            # ✅ Normalize reward strictly into (0,1)
-            normalized = normalize_score(reward.score)
-            total_reward += normalized
+            action = agent.act(obs)
+            obs, reward, done, _ = env.step(action)
+            total_reward += reward.score
             emails_received += 1
             emails_sent += 1
-            # ✅ Normalize reward strictly into (0,1)
-
-            # ✅ Add graders here too
-            tasks = [
-                {"name": "task1", "grader": lambda s: max(0.01, min(0.99, s))},
-                {"name": "task2", "grader": lambda s: max(0.01, min(0.99, s))},
-                {"name": "task3", "grader": lambda s: max(0.01, min(0.99, s))}
-            ]
-            graders = [{"task": t["name"], "score": t["grader"](normalized)} for t in tasks]
-
-            
-
-            print(f"[STEP] task={task_name} step={step_id} action={action} reward={normalized} resolved={normalized>0}")
+            print(f"[STEP] task={task_name} step={step_id} action={action} reward={reward.score} resolved={reward.score>0}")
             step_id += 1
 
         avg_reward = round(total_reward / step_id, 2)
-        print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}")
+        print(f"[TASK BASELINE] task={task_name} average_reward={avg_reward} emails_received={emails_received} emails_sent={emails_sent}\n")
 
     print("[END] Simulation Completed")
-
-
+    print(f"Access your API endpoints in browser or via curl/postman at: {base_url}/reset/<task> and {base_url}/step/<task>")
+    # -------------------------------
 # STARTUP EVENT (HF LOG LINKS)
 # -------------------------------
 @app.on_event("startup")
@@ -439,4 +427,26 @@ def validate_action(action):
         return False
 
     return True
-llm_check(action["response"])
+def llm_check(response_text):
+    try:
+        prompt = f"""
+        Check if this email response is professional and helpful:
+
+        "{response_text}"
+
+        Answer ONLY in JSON:
+        {{"valid": true or false}}
+        """
+
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = extract_json(completion.choices[0].message.content)
+
+        return result.get("valid", False) if result else False
+
+    except Exception as e:
+        print("LLM check failed:", e)
+        return False
