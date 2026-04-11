@@ -5,16 +5,38 @@ import os, json, re
 from openai import OpenAI
 from env.environment import EmailEnv
 
-# -------------------------------
-# LOAD ENV
-# -------------------------------
-load_dotenv()
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-HF_TOKEN = os.getenv("HF_TOKEN")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+client = OpenAI(
+    base_url=os.environ["API_BASE_URL"],
+    api_key=os.environ["API_KEY"]
+)
+def llm_check(response_text):
+    try:
+        prompt = f"""
+        Check if this email response is professional and helpful:
+
+        "{response_text}"
+
+        Answer ONLY in JSON:
+        {{"valid": true or false}}
+        """
+
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = extract_json(completion.choices[0].message["content"])
+        print("LLM raw response:", completion, flush=True)
+        return result.get("valid", False) if result else False
+
+    except Exception as e:
+        print("LLM check failed:", e, flush=True)
+        return False
+
+
 
 # -------------------------------
 # SCHEMA FOR INCOMING ACTION
@@ -39,10 +61,8 @@ def extract_json(text):
                 pass
     return None
 
-# -------------------------------
-# EMAIL AGENT
-# -------------------------------
-# -------------------------------
+
+
 # EMAIL AGENT
 # -------------------------------
 class EmailAgent:
@@ -233,6 +253,12 @@ def step_post(input: dict):
         "priority": input.get("priority"),
         "response": input.get("response")
     }
+     # ✅ Run LLM criteria check
+    if not llm_check(action_dict["response"]):
+        return {
+            "status": "fail",
+            "reason": "LLM criteria failed"
+        }
 
     obs, reward, done, _ = envs[task].step(action_dict)
 
@@ -262,6 +288,7 @@ def step(task: str, action: ActionInput):
     if not validate_action(action_dict):
         return {
             "status": "fail",
+             "reward": 0.01,
             "reason": "Invalid action format"
         }
 
@@ -271,6 +298,7 @@ def step(task: str, action: ActionInput):
     if not llm_check(action_dict["response"]):
         return {
             "status": "fail",
+             "reward": 0.02,
             "reason": "LLM criteria failed"
         }
 
@@ -372,6 +400,7 @@ if __name__ == "__main__":
 
         while not done:
             action = agent.act(obs)
+            llm_check(action["response"])
             obs, reward, done, _ = env.step(action)
             total_reward += reward.score
             emails_received += 1
@@ -450,3 +479,5 @@ def llm_check(response_text):
     except Exception as e:
         print("LLM check failed:", e)
         return False
+    
+llm_check(action["response"])
